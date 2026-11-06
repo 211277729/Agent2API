@@ -1,0 +1,40 @@
+# Agent2API 服务器侧编排 —— 单端口版：面板和网关都在 3065，与 wb 那种「一个站点一条反代」一样简单。
+#
+#   Caddy 里只需要：  a2a.xiaoyuji.cn { reverse_proxy agent2api:3065 }
+#   面板 = https://a2a.xiaoyuji.cn/      网关 = https://a2a.xiaoyuji.cn/v1
+#
+# 镜像由本地 build.ps1 构建后传上来 docker load；升级 = 换 IMAGE_TAG + up -d；
+# 回滚 = 改回旧 tag + up -d。
+
+services:
+  agent2api:
+    image: agent2api:${IMAGE_TAG:-local}
+    container_name: agent2api
+    restart: unless-stopped
+    ports:
+      # 只留本机回环映射，方便在服务器上直接 curl 排查；公网入口是 Caddy。
+      # Caddy 容器走 docker 网络直连 agent2api:3065，不经过这个映射。
+      - "127.0.0.1:3065:3065"
+    networks:
+      - default
+      - caddy                   # 与 Caddy 容器共享，Caddy 里才写得通 agent2api:3065
+    environment:
+      # 面板与网关同端口（默认行为）。若哪天想把管理面收回内网，取消下面这行注释
+      # 再映射 127.0.0.1:3066，Caddy 里就只反代 3065（面板只走 SSH 隧道）。
+      # AGENT2API_PANEL_PORT: "3066"
+
+      AGENT2API_ADMIN_USER: "${A2A_ADMIN_USER:-admin}"
+      AGENT2API_ADMIN_PASSWORD: "${A2A_ADMIN_PASSWORD:-}"
+      AGENT2API_CAPTCHA_ENABLED: "${A2A_CAPTCHA:-1}"
+      # 自建镜像不要用容器内一键更新，版本一律由 IMAGE_TAG 管
+      AGENT2API_SELF_UPDATE: "0"
+    volumes:
+      # agent2api.db（账号/Key/配置/日志）+ account.key（加密密钥）都在这里
+      - ./data:/data
+
+# Caddy 所在的那个 docker 网络（外部已存在，不由本文件创建）。
+# 查名字：docker inspect <caddy容器> --format '{{json .NetworkSettings.Networks}}'
+networks:
+  caddy:
+    external: true
+    name: ${CADDY_NETWORK:-jingyu-api_jingyu-net}

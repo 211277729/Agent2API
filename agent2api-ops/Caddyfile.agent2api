@@ -1,0 +1,32 @@
+# Agent2API —— 跟 wb 那条一样简单：一个站点，一条反代。
+#
+#   面板 = https://a2a.xiaoyuji.cn/          网关 = https://a2a.xiaoyuji.cn/v1
+#   （面板和网关本来就在 3065 同一个端口上，不需要按路径拆）
+#
+# 前置：compose 已让 agent2api 加入 Caddy 所在网络（jingyu-api_jingyu-net），
+#      所以上游写服务名 agent2api:3065，不写 127.0.0.1。
+
+a2a.xiaoyuji.cn {
+	reverse_proxy agent2api:3065 {
+		# 流式：Caddy 默认就即时刷新，写死 -1 只是防以后被中间层改坏
+		flush_interval -1
+	}
+}
+
+# 如果你也想跟我们现有两个站点一样加压缩，可以照抄 wb 的写法：
+#   a2a.xiaoyuji.cn {
+#   	encode gzip
+#   	reverse_proxy agent2api:3065 {
+#   		flush_interval -1
+#   	}
+#   }
+# 实测 Caddy 的 encode 不会压 text/event-stream，也不会缓冲 SSE，所以不影响流式。
+
+# 生效：
+#   sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#   容器版：docker exec <caddy容器> caddy reload --config /etc/caddy/Caddyfile
+#
+# 验证：
+#   curl -s https://a2a.xiaoyuji.cn/health                                  # {"status":"ok"}
+#   curl -s -o /dev/null -w '%{http_code}\n' https://a2a.xiaoyuji.cn/api/session   # 401
+#   curl -s https://a2a.xiaoyuji.cn/ | head -c 120                          # 面板 HTML
