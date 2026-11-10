@@ -18,7 +18,7 @@
 services:
   agent2api:
     build: .
-    image: agent2api:local
+    image: agent2api:latest
     container_name: agent2api
     restart: unless-stopped
     # 可选：给容器设内存上限。超限时内核杀掉进程，再由上面的 restart 策略拉起 ——
